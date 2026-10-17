@@ -676,6 +676,16 @@ $('btnKeepaliveAll').onclick = async () => {
   try { await api('keepalive_all', { method: 'POST' }); toast('全部保活已开始，结果见日志', 'ok'); }
   catch (e) { toast(e.message, 'err'); }
 };
+// 重新扫描 auths/ 目录：外部脚本批量导入/删除凭证后免重启对齐（只增删账号，
+// 已存在账号的积分/冷却状态保留）。后端对「扫到 0 个文件」有拒绝保护。
+if ($('btnRescan')) $('btnRescan').onclick = async () => {
+  if (!confirm('将按 auths/ 目录重新对齐账号池：新增目录里的凭证、剔除已删除文件的账号（积分与冷却状态保留）。继续？')) return;
+  try {
+    const r = await api('accounts/rescan', { method: 'POST' });
+    toast('扫描 ' + r.scanned + ' 个文件：新增 ' + r.added + '，剔除 ' + r.removed, 'ok');
+    loadOverview(true);
+  } catch (e) { toast(e.message, 'err'); }
+};
 $('btnTravelAll').onclick = async () => {
   try { await api('travel_all', { method: 'POST' }); toast('旅行巡检已开始（含领养链路），结果见日志', 'ok'); }
   catch (e) { toast(e.message, 'err'); }

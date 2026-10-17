@@ -162,6 +162,7 @@ func (p *Panel) routes() {
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/disable", p.withAuth(p.accountDisable))
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/pause", p.withAuth(p.accountPause))
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/resume", p.withAuth(p.accountResume))
+	p.mux.HandleFunc("POST /panel/api/accounts/rescan", p.withAuth(p.accountsRescan))
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/checkin", p.withAuth(p.accountCheckin))
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/balance", p.withAuth(p.accountBalance))
 	p.mux.HandleFunc("POST /panel/api/accounts/{uid}/remove", p.withAuth(p.accountRemove))
@@ -504,6 +505,49 @@ func (p *Panel) accountResume(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("panel: resume uid=%s（恢复参与选号）", uid)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// accountsRescan 按 auths/ 目录重新对齐账号池：外部脚本批量导入/删除凭证文件后
+// 免重启生效。只增删账号，已存在账号的积分/冷却/计数等状态保留（pool.SyncToDir 语义）。
+func (p *Panel) accountsRescan(w http.ResponseWriter, r *http.Request) {
+	if p.cfg.AuthDir == "" {
+		writeErr(w, http.StatusNotImplemented, "auth_dir not configured")
+		return
+	}
+	before := make(map[string]bool, 1024)
+	for _, s := range p.cfg.Pool.List() {
+		before[s.UID] = true
+	}
+	auths, err := auth.LoadDir(p.cfg.AuthDir)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "scan auth dir: "+err.Error())
+		return
+	}
+	// 扫到 0 个文件而池非空 = 目录挂载丢失或路径配错。此时 SyncToDir 会清空整池
+	// 并把结果落盘（不可逆），必须拒绝，交给人去确认挂载。
+	if len(auths) == 0 && len(before) > 0 {
+		writeErr(w, http.StatusConflict, "扫描到 0 个凭证文件（疑似 auth_dir 挂载异常），已拒绝执行")
+		return
+	}
+	p.cfg.Pool.SyncToDir(auths)
+	after := make(map[string]bool, len(auths))
+	added := 0
+	for _, s := range p.cfg.Pool.List() {
+		after[s.UID] = true
+		if !before[s.UID] {
+			added++
+		}
+	}
+	removed := 0
+	for uid := range before {
+		if !after[uid] {
+			removed++
+		}
+	}
+	log.Printf("panel: rescan auths 目录 文件=%d 新增=%d 剔除=%d", len(auths), added, removed)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "scanned": len(auths), "added": added, "removed": removed,
+	})
 }
 
 // accountCheckin 单号签到：DailyCheckin + 余额查询解冻（已签到等业务错误不阻塞余额刷新），
