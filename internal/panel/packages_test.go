@@ -1,0 +1,43 @@
+package panel
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/linguo2625469/workbuddy2api-panel/internal/pool"
+)
+
+// packages?uid= 单号模式：未知账号必须 404，且不得退化成全量整池查询。
+//
+// 面板「积分」按钮走单号模式（只打 1 次上游）；输错/过期的 UID 若落进全量
+// 分支，就会重现 2026-10 移除的整池逐号查询（批量特征、风控风险高）。
+func TestPanelPackagesSingleUIDUnknown(t *testing.T) {
+	p := New(Config{Version: "test", APIKey: "test-key", Pool: pool.New("")})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/panel/api/packages?uid=nope", nil)
+	req.Header.Set("Authorization", "Bearer test-key")
+	p.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("packages?uid=nope status=%d want 404; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "account not found") {
+		t.Fatalf("packages?uid=nope body=%s", rec.Body.String())
+	}
+}
+
+// uid 只有空白时按全量模式处理（空池 → 200 + 空列表），而不是 404。
+func TestPanelPackagesUIDBlankFallsBack(t *testing.T) {
+	p := New(Config{Version: "test", APIKey: "test-key", Pool: pool.New("")})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/panel/api/packages?uid=%20%20", nil)
+	req.Header.Set("Authorization", "Bearer test-key")
+	p.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("packages?uid=blank status=%d want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"accounts":[]`) {
+		t.Fatalf("blank uid 应回落全量模式（空池空列表）；body=%s", rec.Body.String())
+	}
+}

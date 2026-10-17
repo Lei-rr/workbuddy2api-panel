@@ -792,22 +792,30 @@ func (p *Panel) usageSave(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// packages 返回全部账号的积分包构成，供「积分构成」视图对比。
+// packagesRow 是 packages 接口的单账号返回行。
+type packagesRow struct {
+	UID      string                   `json:"uid"`
+	Nickname string                   `json:"nickname"`
+	Realm    string                   `json:"realm"`
+	Remain   int64                    `json:"remain"`
+	Size     int64                    `json:"size"`
+	Packages []upstream.CreditPackage `json:"packages"`
+	Error    string                   `json:"error,omitempty"`
+}
+
+// packages 返回积分包构成。
 //
-// 逐个账号向上游查（并发有上限，避免瞬时打满上游限流），失败只在对应账号上
-// 标 error，不影响其它账号——一个号 token 失效不该让整页空白。
+// ?uid= 为单号模式（推荐）：只查 1 个账号、只打 1 次上游——面板账号池的
+// 「积分」按钮走这条。无参数为全量模式：逐个账号向上游查（并发有上限），
+// 保留给脚本/兼容；面板前端已不再调用（整池逐号查询的批量特征有风控风险）。
+// 失败只在对应账号上标 error，不影响其它账号——一个号 token 失效不该让整页空白。
 func (p *Panel) packages(w http.ResponseWriter, r *http.Request) {
-	accts := p.cfg.Pool.List()
-	type row struct {
-		UID      string                   `json:"uid"`
-		Nickname string                   `json:"nickname"`
-		Realm    string                   `json:"realm"`
-		Remain   int64                    `json:"remain"`
-		Size     int64                    `json:"size"`
-		Packages []upstream.CreditPackage `json:"packages"`
-		Error    string                   `json:"error,omitempty"`
+	if uid := strings.TrimSpace(r.URL.Query().Get("uid")); uid != "" {
+		p.packagesOne(w, uid)
+		return
 	}
-	out := make([]row, len(accts))
+	accts := p.cfg.Pool.List()
+	out := make([]packagesRow, len(accts))
 
 	sem := make(chan struct{}, 3)
 	var wg sync.WaitGroup
@@ -818,7 +826,7 @@ func (p *Panel) packages(w http.ResponseWriter, r *http.Request) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			it := row{UID: s.UID, Nickname: s.Nickname, Realm: s.Realm}
+			it := packagesRow{UID: s.UID, Nickname: s.Nickname, Realm: s.Realm}
 			a := p.cfg.Pool.AuthByUID(s.UID)
 			if a == nil {
 				it.Error = "account not loaded"
@@ -842,6 +850,33 @@ func (p *Panel) packages(w http.ResponseWriter, r *http.Request) {
 	// 余额降序：多的在前，便于和少的对比。
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Remain > out[j].Remain })
 	writeJSON(w, http.StatusOK, map[string]any{"accounts": out})
+}
+
+// packagesOne 单号模式：只查一个账号（1 次上游请求），供面板「积分」按钮。
+// 上游查询失败仍返回 200 + row.Error——前端与其他接口的 error 行语义一致。
+func (p *Panel) packagesOne(w http.ResponseWriter, uid string) {
+	st, ok := p.cfg.Pool.Status(uid)
+	if !ok {
+		writeErr(w, http.StatusNotFound, "account not found")
+		return
+	}
+	it := packagesRow{UID: st.UID, Nickname: st.Nickname, Realm: st.Realm}
+	a := p.cfg.Pool.AuthByUID(st.UID)
+	if a == nil {
+		it.Error = "account not loaded"
+		writeJSON(w, http.StatusOK, map[string]any{"accounts": []packagesRow{it}})
+		return
+	}
+	packs, remain, size, err := p.cfg.Upstream.CreditPackages(a)
+	if err != nil {
+		it.Error = err.Error()
+		writeJSON(w, http.StatusOK, map[string]any{"accounts": []packagesRow{it}})
+		return
+	}
+	it.Packages = packs
+	it.Remain = remain
+	it.Size = size
+	writeJSON(w, http.StatusOK, map[string]any{"accounts": []packagesRow{it}})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
