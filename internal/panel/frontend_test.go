@@ -514,6 +514,8 @@ process.stdout.write(JSON.stringify({
   })(),
   labelCustom: ctx.trangeLabel('t'),
   labelToday: (function () { ctx.trangeState('t').preset = 'today'; return ctx.trangeLabel('t'); })(),
+  // 用量页不带 preset 绑定时必须落到「今天」（TRANGE_DEFAULT），不是近 3 天。
+  defaultPreset: ctx.trangeState('brand-new-host').preset,
 }));`
 	f, err := os.CreateTemp(t.TempDir(), "trange-*.cjs")
 	if err != nil {
@@ -538,7 +540,7 @@ process.stdout.write(JSON.stringify({
 		`"rolling24":"hours=24","rolling72":"hours=72","rolling0":"hours=0","log0":"",` +
 		`"log24From":true,"log24HasHours":false,"log7dFrom":true,` +
 		`"custom":"from=` + local(9, 0) + `&to=` + local(18, 30) + `",` +
-		`"labelCustom":"9-30 09:00 → 9-30 18:30","labelToday":"今天"}`
+		`"labelCustom":"9-30 09:00 → 9-30 18:30","labelToday":"今天","defaultPreset":"today"}`
 	if strings.TrimSpace(string(out)) != want {
 		t.Fatalf("time range=%s\nwant %s", out, want)
 	}

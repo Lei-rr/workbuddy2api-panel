@@ -115,7 +115,7 @@ const TRANGE_PRESETS = [
   ['0', '全部历史'],
   ['custom', '自定义…'],
 ];
-const TRANGE_DEFAULT = '72';
+const TRANGE_DEFAULT = 'today';
 const trangeStates = new Map(); // hostId → { preset, from: Date|null, to: Date|null }
 
 // dtLocalValue / dtLocalParse 与 <input type=datetime-local> 的取值格式互转
