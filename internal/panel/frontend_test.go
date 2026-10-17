@@ -870,6 +870,8 @@ const ctx = {
   // 卡片可见性由 expBoxShow() 按当前 tab 决定；切片环境没有 tab 状态，桩成
   // "渲染即显示"，与下方 visible 断言口径一致。
   expBoxShow: () => { (sinks['expBox'] || mk('expBox')).hidden = false; },
+  // 到期列表分页状态（模块级 let，切片环境需要给初值）。
+  expAll: [], expPage: 1, expPageSize: 100,
   Date, Math, Number, String, Map, Array, Object, isNaN,
 };
 vm.createContext(ctx);

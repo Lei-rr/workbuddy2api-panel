@@ -374,14 +374,13 @@ setTimeout(() => {
 let accTab = 'list';                          // list | expiry
 
 function switchAccTab(tab) {
-  accTab = tab === 'expiry' ? 'expiry' : 'list';
+  accTab = (tab === 'expiry' || tab === 'models') ? tab : 'list';
   document.querySelectorAll('#accTabs .subtab').forEach(b => b.classList.toggle('on', b.dataset.tab === accTab));
-  const isExp = accTab === 'expiry';
-  if ($('expBox')) $('expBox').hidden = !isExp;
-  if ($('accBox')) $('accBox').hidden = isExp;
-  if ($('mlBox')) $('mlBox').hidden = isExp;
+  if ($('expBox')) $('expBox').hidden = accTab !== 'expiry';
+  if ($('accBox')) $('accBox').hidden = accTab !== 'list';
+  if ($('mlBox')) $('mlBox').hidden = accTab !== 'models';
   // 切到「积分到期」时若还没有任何内容（快照未渲染过），先用 overview 快照补上。
-  if (isExp && $('expList') && !$('expList').children.length && overviewData) renderExpirySnapshot(overviewData);
+  if (accTab === 'expiry' && $('expList') && !$('expList').children.length && overviewData) renderExpirySnapshot(overviewData);
 }
 
 // 到期卡片只在「积分到期」tab 内可见；数据刷新照常进行，但不抢账号列表的版面。
@@ -392,6 +391,9 @@ expBoxShow();
 
 /* ── 账号池筛选 + 客户端分页 ───────────────────────────────────────────
    /overview 仍返回全量，前端只渲染当前页；5s 轮询重渲染时保持筛选条件与页码。 */
+let expAll = [];                              // 到期快照（按最近到期升序，含无到期账号）
+let expPage = 1;
+let expPageSize = 100;                        // 0 = 全部
 let accAll = [];
 let accFilters = { q: '', state: '', ver: '' };
 let accPageSize = 100;                        // 0 = 全部
@@ -534,6 +536,14 @@ function renderAccounts(list) {
 }
 
 if ($('accTabs')) document.querySelectorAll('#accTabs .subtab').forEach(b => b.onclick = () => switchAccTab(b.dataset.tab));
+/* 到期列表分页（数据同 overview 快照，翻页只重渲染当前页）。 */
+if ($('expPageSize')) $('expPageSize').addEventListener('change', () => {
+  expPageSize = parseInt($('expPageSize').value, 10) || 0;
+  expPage = 1;
+  renderExpirySnapshot(overviewData);
+});
+if ($('expPrev')) $('expPrev').onclick = () => { if (expPage > 1) { expPage--; renderExpirySnapshot(overviewData); } };
+if ($('expNext')) $('expNext').onclick = () => { expPage++; renderExpirySnapshot(overviewData); };
 
 /* 筛选栏 / 分页控件接线（元素常驻，事件只注册一次；重渲染只换 tbody）。 */
 if ($('accQ')) $('accQ').addEventListener('input', () => {
@@ -3003,7 +3013,13 @@ function renderExpirySnapshot(d) {
     if (y.key === null) return -1;
     return x.key - y.key;
   });
-  const rows = keyed.map(({ a, ms }) => {
+  // 分页：排序后的完整列表留一份，翻页只重渲染当前页（1000+ 个号一页放不下）。
+  expAll = keyed;
+  const pages = expPageSize > 0 ? Math.max(1, Math.ceil(expAll.length / expPageSize)) : 1;
+  if (expPage > pages) expPage = pages;
+  if (expPage < 1) expPage = 1;
+  const pageRows = expPageSize > 0 ? expAll.slice((expPage - 1) * expPageSize, expPage * expPageSize) : expAll;
+  const rows = pageRows.map(({ a, ms }) => {
     const nm = esc(a.nickname || String(a.uid || '').slice(0, 8));
     if (!ms || !a.credits_earliest_remaining) {
       return '<div class="exp-row"><span class="exp-dot" style="background:var(--ok)"></span>' +
@@ -3026,6 +3042,10 @@ function renderExpirySnapshot(d) {
   }).join('');
   $('expList').innerHTML = rows || '<div class="empty">没有账号</div>';
   $('expNote').textContent = list.length + ' 个账号 · 本地状态快照（随余额刷新更新；逐包明细见账号行「积分」按钮）';
+  if ($('expCount')) $('expCount').textContent = '共 ' + expAll.length + ' 个';
+  if ($('expPageInfo')) $('expPageInfo').textContent = expPage + ' / ' + pages;
+  if ($('expPrev')) $('expPrev').disabled = expPage <= 1;
+  if ($('expNext')) $('expNext').disabled = expPage >= pages;
   expBoxShow();
 }
 
