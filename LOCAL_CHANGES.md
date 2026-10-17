@@ -13,12 +13,12 @@
 
 | 文件 | 改动 | 原因 |
 |---|---|---|
-| `internal/panel/app.js` | `TRANGE_DEFAULT='today'`；账号池客户端筛选（搜索/状态/版本）+ 分页（50/100/200/全部）；二级 tab（`accTab`/`switchAccTab`/`expBoxShow`）；账号行「积分」按钮 + `pkVeil` 单号弹窗（复用官方 `pk*` 辅助函数）；「重新扫描」按钮事件；`TITLES` 去掉 `packages`；删 `btnExp` 绑定 | 1000+ 账号时页面可用性；整池逐号查上游有风控风险 |
-| `internal/panel/index.html` | 筛选栏 `#accFilter`；`#accTabs` 二级 tab；`#accBox`/`#mlBox` id；`#pkVeil` 弹窗；`#btnRescan` 按钮；删导航「积分构成」项与到期卡「检查」按钮 | 同上 |
+| `internal/panel/app.js` | `TRANGE_DEFAULT='today'`；账号池客户端筛选（搜索/状态/版本）+ 分页（50/100/200/全部）；三级 tab（账号池/积分到期/模型锁池，`accTab`/`switchAccTab`/`expBoxShow`）；到期列表独立分页（`expAll`/`expPage`/`expPageSize`）；账号行「积分」按钮 + `pkVeil` 单号弹窗（复用官方 `pk*` 辅助函数）；「重新扫描」按钮事件；`TITLES` 去掉 `packages`；删 `btnExp` 绑定 | 1000+ 账号时页面可用性；整池逐号查上游有风控风险 |
+| `internal/panel/index.html` | 筛选栏 `#accFilter`；`#accTabs` 三个 tab；到期分页栏 `#expFilter`；`#accBox`/`#mlBox` id；`#pkVeil` 弹窗；`#btnRescan` 按钮；删导航「积分构成」项与到期卡「检查」按钮 | 同上 |
 | `internal/panel/panel.go` | `packages` 收紧为 `?uid=` 必填（无 uid → 400，删除整池全量模式）；`packagesOne` 单号查询（未知 uid 404、上游失败 200+error）；`accountsRescan`（`auth.LoadDir` + `pool.SyncToDir`，扫到 0 文件而池非空时 409 拒绝） | 单号按需查；auths/ 目录热对齐 |
 | `internal/panel/packages_test.go` | 新增：未知 uid 404、无 uid/空白 uid 一律 400 | 钉住单号模式 |
 | `internal/panel/rescan_test.go` | 新增：0 文件保护拒绝、空池放行 | 防止挂载丢失清空整池 |
-| `internal/panel/frontend_test.go` | +6 行：`expBoxShow` 桩（切片环境无 tab 状态）、`defaultPreset:"today"` 断言 | 测试跟随实现，防静默回退 |
+| `internal/panel/frontend_test.go` | +9 行：`expBoxShow` 桩与分页状态初值（切片环境无 tab/分页）、`defaultPreset:"today"` 断言 | 测试跟随实现，防静默回退 |
 | `.github/workflows/docker-ghcr.yml` | 构建平台仅 `linux/amd64`，去掉 QEMU | 部署机 x86_64，多架构每次多等 10 分钟 |
 
 核心包 `internal/pool`、`server`、`upstream`、`scheduler`、`auth` **零改动**。
