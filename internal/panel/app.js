@@ -679,7 +679,6 @@ $('btnKeepaliveAll').onclick = async () => {
 // 重新扫描 auths/ 目录：外部脚本批量导入/删除凭证后免重启对齐（只增删账号，
 // 已存在账号的积分/冷却状态保留）。后端对「扫到 0 个文件」有拒绝保护。
 if ($('btnRescan')) $('btnRescan').onclick = async () => {
-  if (!confirm('将按 auths/ 目录重新对齐账号池：新增目录里的凭证、剔除已删除文件的账号（积分与冷却状态保留）。继续？')) return;
   try {
     const r = await api('accounts/rescan', { method: 'POST' });
     toast('扫描 ' + r.scanned + ' 个文件：新增 ' + r.added + '，剔除 ' + r.removed, 'ok');
