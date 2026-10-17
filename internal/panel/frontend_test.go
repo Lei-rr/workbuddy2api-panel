@@ -865,6 +865,9 @@ const ctx = {
   esc: s => String(s == null ? '' : s),
   fmtTok: v => String(v == null ? 0 : v),
   $: id => (sinks[id] || mk(id)),
+  // 卡片可见性由 expBoxShow() 按当前 tab 决定；切片环境没有 tab 状态，桩成
+  // "渲染即显示"，与下方 visible 断言口径一致。
+  expBoxShow: () => { (sinks['expBox'] || mk('expBox')).hidden = false; },
   Date, Math, Number, String, Map, Array, Object, isNaN,
 };
 vm.createContext(ctx);

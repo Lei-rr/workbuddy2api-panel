@@ -369,6 +369,27 @@ setTimeout(() => {
 }, 0);
 
 /* ── 账号池 ───────────────────────────────────────────────────────── */
+/* ── 账号池二级 tab（账号 / 积分到期）───────────────────────────────────
+   账号 tab：账号表 + 模型锁池；积分到期 tab：到期卡片（/overview 快照，零上游请求）。 */
+let accTab = 'list';                          // list | expiry
+
+function switchAccTab(tab) {
+  accTab = tab === 'expiry' ? 'expiry' : 'list';
+  document.querySelectorAll('#accTabs .subtab').forEach(b => b.classList.toggle('on', b.dataset.tab === accTab));
+  const isExp = accTab === 'expiry';
+  if ($('expBox')) $('expBox').hidden = !isExp;
+  if ($('accBox')) $('accBox').hidden = isExp;
+  if ($('mlBox')) $('mlBox').hidden = isExp;
+  // 切到「积分到期」时若还没有任何内容（快照未渲染过），先用 overview 快照补上。
+  if (isExp && $('expList') && !$('expList').children.length && overviewData) renderExpirySnapshot(overviewData);
+}
+
+// 到期卡片只在「积分到期」tab 内可见；数据刷新照常进行，但不抢账号列表的版面。
+function expBoxShow() { if ($('expBox')) $('expBox').hidden = accTab !== 'expiry'; }
+// 求值即接管初始可见性：hidden 不写死在 HTML（issue #137 的死锁根因），只要这份
+// 脚本能执行，卡片可见性就由 expBoxShow 决定；脚本坏掉时卡片裸露（可发现）而非消失。
+expBoxShow();
+
 /* ── 账号池筛选 + 客户端分页 ───────────────────────────────────────────
    /overview 仍返回全量，前端只渲染当前页；5s 轮询重渲染时保持筛选条件与页码。 */
 let accAll = [];
@@ -511,6 +532,8 @@ function renderAccounts(list) {
   }).join('');
   updateAccPager(filtered.length, pages);
 }
+
+if ($('accTabs')) document.querySelectorAll('#accTabs .subtab').forEach(b => b.onclick = () => switchAccTab(b.dataset.tab));
 
 /* 筛选栏 / 分页控件接线（元素常驻，事件只注册一次；重渲染只换 tbody）。 */
 if ($('accQ')) $('accQ').addEventListener('input', () => {
@@ -2993,8 +3016,8 @@ function renderExpirySnapshot(d) {
       '</span></div>';
   }).join('');
   $('expList').innerHTML = rows || '<div class="empty">没有账号</div>';
-  $('expNote').textContent = list.length + ' 个账号 · 快照（来自本地状态，点「检查」拉实时明细）';
-  $('expBox').hidden = false;
+  $('expNote').textContent = list.length + ' 个账号 · 本地状态快照（随余额刷新更新；逐包明细见账号行「积分」按钮）';
+  expBoxShow();
 }
 
 async function loadExpiry(force) {
