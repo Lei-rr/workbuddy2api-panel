@@ -15,7 +15,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -847,53 +846,16 @@ type packagesRow struct {
 	Error    string                   `json:"error,omitempty"`
 }
 
-// packages 返回积分包构成。
-//
-// ?uid= 为单号模式（推荐）：只查 1 个账号、只打 1 次上游——面板账号池的
-// 「积分」按钮走这条。无参数为全量模式：逐个账号向上游查（并发有上限），
-// 保留给脚本/兼容；面板前端已不再调用（整池逐号查询的批量特征有风控风险）。
-// 失败只在对应账号上标 error，不影响其它账号——一个号 token 失效不该让整页空白。
+// packages 返回单个账号的积分包构成（?uid= 必填）。
+// 只查 1 个账号、只打 1 次上游——面板账号池的「积分」按钮走这条。
+// 整池逐号查询的批量特征有风控风险，已移除全量模式：无 uid 直接 400。
 func (p *Panel) packages(w http.ResponseWriter, r *http.Request) {
-	if uid := strings.TrimSpace(r.URL.Query().Get("uid")); uid != "" {
-		p.packagesOne(w, uid)
+	uid := strings.TrimSpace(r.URL.Query().Get("uid"))
+	if uid == "" {
+		writeErr(w, http.StatusBadRequest, "uid is required")
 		return
 	}
-	accts := p.cfg.Pool.List()
-	out := make([]packagesRow, len(accts))
-
-	sem := make(chan struct{}, 3)
-	var wg sync.WaitGroup
-	for i, s := range accts {
-		wg.Add(1)
-		go func(i int, s pool.Status) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
-
-			it := packagesRow{UID: s.UID, Nickname: s.Nickname, Realm: s.Realm}
-			a := p.cfg.Pool.AuthByUID(s.UID)
-			if a == nil {
-				it.Error = "account not loaded"
-				out[i] = it
-				return
-			}
-			packs, remain, size, err := p.cfg.Upstream.CreditPackages(a)
-			if err != nil {
-				it.Error = err.Error()
-				out[i] = it
-				return
-			}
-			it.Packages = packs
-			it.Remain = remain
-			it.Size = size
-			out[i] = it
-		}(i, s)
-	}
-	wg.Wait()
-
-	// 余额降序：多的在前，便于和少的对比。
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Remain > out[j].Remain })
-	writeJSON(w, http.StatusOK, map[string]any{"accounts": out})
+	p.packagesOne(w, uid)
 }
 
 // packagesOne 单号模式：只查一个账号（1 次上游请求），供面板「积分」按钮。

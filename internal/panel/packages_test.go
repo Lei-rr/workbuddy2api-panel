@@ -27,17 +27,19 @@ func TestPanelPackagesSingleUIDUnknown(t *testing.T) {
 	}
 }
 
-// uid 只有空白时按全量模式处理（空池 → 200 + 空列表），而不是 404。
-func TestPanelPackagesUIDBlankFallsBack(t *testing.T) {
+// 无 uid（或只有空白）一律 400：全量模式已移除，避免整池逐号查上游的批量特征。
+func TestPanelPackagesRequiresUID(t *testing.T) {
 	p := New(Config{Version: "test", APIKey: "test-key", Pool: pool.New("")})
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/panel/api/packages?uid=%20%20", nil)
-	req.Header.Set("Authorization", "Bearer test-key")
-	p.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("packages?uid=blank status=%d want 200; body=%s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), `"accounts":[]`) {
-		t.Fatalf("blank uid 应回落全量模式（空池空列表）；body=%s", rec.Body.String())
+	for _, q := range []string{"", "?uid=", "?uid=%20%20"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/panel/api/packages"+q, nil)
+		req.Header.Set("Authorization", "Bearer test-key")
+		p.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("packages%s status=%d want 400; body=%s", q, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "uid is required") {
+			t.Fatalf("packages%s body=%s", q, rec.Body.String())
+		}
 	}
 }
