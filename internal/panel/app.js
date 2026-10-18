@@ -376,17 +376,21 @@ let accTab = 'list';                          // list | expiry
 function switchAccTab(tab) {
   accTab = (tab === 'expiry' || tab === 'models') ? tab : 'list';
   document.querySelectorAll('#accTabs .subtab').forEach(b => b.classList.toggle('on', b.dataset.tab === accTab));
-  if ($('expBox')) $('expBox').hidden = accTab !== 'expiry';
-  if ($('accBox')) $('accBox').hidden = accTab !== 'list';
-  if ($('mlBox')) $('mlBox').hidden = accTab !== 'models';
+  expBoxShow();
   // 切到「积分到期」时若还没有任何内容（快照未渲染过），先用 overview 快照补上。
   if (accTab === 'expiry' && $('expList') && !$('expList').children.length && overviewData) renderExpirySnapshot(overviewData);
 }
 
-// 到期卡片只在「积分到期」tab 内可见；数据刷新照常进行，但不抢账号列表的版面。
-function expBoxShow() { if ($('expBox')) $('expBox').hidden = accTab !== 'expiry'; }
-// 求值即接管初始可见性：hidden 不写死在 HTML（issue #137 的死锁根因），只要这份
-// 脚本能执行，卡片可见性就由 expBoxShow 决定；脚本坏掉时卡片裸露（可发现）而非消失。
+// 三个面板容器（账号池 / 积分到期 / 模型锁池）的可见性统一由当前 tab 决定。
+// hidden 不写死在 HTML（issue #137 的死锁根因）：只要这份脚本能执行，可见性就由这里
+// 接管；脚本坏掉时三个容器都裸露（可发现）而不是整块消失。
+// 注意必须同时管三个：只初始化到期卡片会让模型锁池在首屏裸露在账号池下面。
+function expBoxShow() {
+  if ($('expBox')) $('expBox').hidden = accTab !== 'expiry';
+  if ($('accBox')) $('accBox').hidden = accTab !== 'list';
+  if ($('mlBox')) $('mlBox').hidden = accTab !== 'models';
+}
+// 求值即接管初始可见性。
 expBoxShow();
 
 /* ── 账号池筛选 + 客户端分页 ───────────────────────────────────────────
